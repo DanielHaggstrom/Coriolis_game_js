@@ -21,34 +21,47 @@ let projectiles = [];
 let isDragging = false;
 let startPos = null;
 let dragLine = null;
-let velocityScale = 50; // Adjusted to slow down projectiles
+let velocityScale = 50;  // Adjust the speed scale as needed
 let maxDragDistance = 200;
 let maxProjectiles = 5; // Limit the number of projectiles to 5
 let graphics; // Single graphics object for drawing the line
+let cylinderRadius; // Radius of the inscribed cylinder
+let angularVelocity = 0; // Initial angular velocity
+let angularVelocityMax = (2 * Math.PI) / 30; // 2 RPM in radians per second
+let sliderLabel; // To show angular speed in RPM and rad/s
+let speedRatioText; // Text to show the speed ratio during drag
 
 function create() {
     // Create a single graphics object for the entire scene
     graphics = this.add.graphics();
 
+    // Calculate the inscribed circle's radius (cylinder radius)
+    let centerX = config.width / 2;
+    let centerY = config.height / 2;
+    cylinderRadius = Math.min(config.width, config.height) / 2 - 10;  // The -10 is for padding from the boundaries
+
     // Draw the box boundaries
     graphics.lineStyle(2, 0x808080);  // Thin gray line for boundaries
     graphics.strokeRect(0, 0, config.width, config.height);  // Box around the entire game area
 
-    // Draw the thick black circle in the center
-    let centerX = config.width / 2;
-    let centerY = config.height / 2;
-    let centerCircleRadius = 50;  // Radius of the black circle
+    // Draw the large black circle (inscribed cylinder)
     graphics.lineStyle(8, 0x000000);  // Thick black circle
-    graphics.strokeCircle(centerX, centerY, centerCircleRadius);
+    graphics.strokeCircle(centerX, centerY, cylinderRadius);
 
     // Draw the crosshairs in the center
     graphics.lineStyle(2, 0x000000);  // Thin black line for crosshairs
     graphics.lineBetween(centerX - 10, centerY, centerX + 10, centerY);  // Horizontal line
     graphics.lineBetween(centerX, centerY - 10, centerX, centerY + 10);  // Vertical line
 
+    // Create the speed ratio text
+    speedRatioText = this.add.text(20, 20, '', { fontSize: '16px', fill: '#000' });
+
+    // Create the slider and place it in the HTML outside the Phaser canvas
+    createSlider();
+
     // Handle mouse input for dragging and launching projectiles
     this.input.on('pointerdown', (pointer) => {
-        if (!isDragging) {
+        if (!isDragging && insideCylinder(pointer)) {
             startPos = { x: pointer.x, y: pointer.y };
             isDragging = true;
 
@@ -61,6 +74,16 @@ function create() {
         if (isDragging && dragLine) {
             // Update the line's end point to the current pointer position
             dragLine.setTo(startPos.x, startPos.y, pointer.x, pointer.y);
+
+            // Calculate launch speed and ratio
+            let dragVelocity = calculateVelocity(startPos, pointer);
+            let radialDistance = distanceFromCenter(startPos);
+            let tangentialSpeed = Math.abs(radialDistance * angularVelocity);
+            let launchSpeedMagnitude = Math.sqrt(dragVelocity.vx * dragVelocity.vx + dragVelocity.vy * dragVelocity.vy);
+            let speedRatio = tangentialSpeed !== 0 ? (launchSpeedMagnitude / tangentialSpeed).toFixed(2) : '∞';
+
+            // Update speed ratio text
+            speedRatioText.setText(`Speed Ratio: ${speedRatio}`);
 
             // Clear the previous frame's graphics and draw the updated line
             graphics.clear();
@@ -78,18 +101,30 @@ function create() {
             isDragging = false;
 
             // Calculate the velocity based on the drag distance and direction
-            let velocity = calculateVelocity(startPos, pointer);
+            let dragVelocity = calculateVelocity(startPos, pointer);
+
+            // Compute tangential speed based on the projectile's radial distance from the center
+            let radialDistance = distanceFromCenter(startPos);
+            let tangentialVelocity = computeTangentialVelocity(startPos, radialDistance);
+
+            // The final velocity will be the sum of the tangential velocity and drag velocity
+            let finalVelocity = {
+                vx: dragVelocity.vx + tangentialVelocity.vx,
+                vy: dragVelocity.vy + tangentialVelocity.vy
+            };
 
             // Create and launch the projectile
-            createProjectile(this, startPos, velocity);
+            if (insideCylinder(startPos)) {
+                createProjectile(this, startPos, finalVelocity);
+            }
 
             // Clear the drag line after releasing
             graphics.clear();
-
-            // Re-draw the static elements (box boundaries, circle, and crosshairs)
             drawStaticElements(graphics);
-
             dragLine = null;
+
+            // Clear speed ratio text
+            speedRatioText.setText('');
         }
     });
 }
@@ -97,15 +132,39 @@ function create() {
 function update() {
     // Update the position of each projectile
     projectiles.forEach(projectile => {
+        applyCoriolisForce(projectile);  // Apply Coriolis force
         projectile.x += projectile.vx;
         projectile.y += projectile.vy;
 
-        // Optionally remove projectile if it goes out of bounds
-        if (projectile.x < 0 || projectile.x > config.width || projectile.y < 0 || projectile.y > config.height) {
-            projectiles.splice(projectiles.indexOf(projectile), 1);  // Remove from array
-            projectile.destroy();  // Destroy the visual object
+        // Stop the projectile when it hits the cylinder's wall
+        if (distanceFromCenter(projectile) >= cylinderRadius) {
+            projectile.vx = 0;
+            projectile.vy = 0;
         }
     });
+}
+
+// Function to calculate the tangential velocity for a projectile based on its radial distance from the center
+function computeTangentialVelocity(position, radialDistance) {
+    // Tangential velocity is perpendicular to the radial direction (cylinder is spinning counterclockwise)
+    let tangentialVelocity = {
+        vx: -radialDistance * angularVelocity * (position.y - config.height / 2) / radialDistance,
+        vy: radialDistance * angularVelocity * (position.x - config.width / 2) / radialDistance
+    };
+
+    return tangentialVelocity;
+}
+
+// Function to calculate distance from the center of the cylinder
+function distanceFromCenter(point) {
+    let centerX = config.width / 2;
+    let centerY = config.height / 2;
+    return Math.sqrt(Math.pow(point.x - centerX, 2) + Math.pow(point.y - centerY, 2));
+}
+
+// Function to check if a point is inside the cylinder
+function insideCylinder(point) {
+    return distanceFromCenter(point) <= cylinderRadius;
 }
 
 function createProjectile(scene, position, velocity) {
@@ -141,27 +200,59 @@ function calculateVelocity(startPos, endPos) {
 
     // Return the velocity vector, scaled by velocityScale
     return {
-        vx: dx / velocityScale,  // Adjusted velocity
-        vy: dy / velocityScale   // Adjusted velocity
+        vx: dx / velocityScale,
+        vy: dy / velocityScale
     };
+}
+
+// Function to apply Coriolis force to projectiles
+function applyCoriolisForce(projectile) {
+    let relativeX = projectile.x - config.width / 2;
+    let relativeY = projectile.y - config.height / 2;
+
+    let coriolisX = -2 * angularVelocity * projectile.vy;
+    let coriolisY = 2 * angularVelocity * projectile.vx;
+
+    projectile.vx += coriolisX;
+    projectile.vy += coriolisY;
 }
 
 // Function to re-draw the static elements (box, circle, and crosshairs)
 function drawStaticElements(graphics) {
     let centerX = config.width / 2;
     let centerY = config.height / 2;
-    let centerCircleRadius = 50;
-
-    // Re-draw the box boundaries
     graphics.lineStyle(2, 0x808080);
-    graphics.strokeRect(0, 0, config.width, config.height);
-
-    // Re-draw the thick black circle
+    graphics.strokeRect(0, 0, config.width, config.height);  // Box boundaries
     graphics.lineStyle(8, 0x000000);
-    graphics.strokeCircle(centerX, centerY, centerCircleRadius);
-
-    // Re-draw the crosshairs
+    graphics.strokeCircle(centerX, centerY, cylinderRadius);  // Large black circle (cylinder)
     graphics.lineStyle(2, 0x000000);
-    graphics.lineBetween(centerX - 10, centerY, centerX + 10, centerY);  // Horizontal line
-    graphics.lineBetween(centerX, centerY - 10, centerX, centerY + 10);  // Vertical line
+    graphics.lineBetween(centerX - 10, centerY, centerX + 10, centerY);  // Crosshairs
+    graphics.lineBetween(centerX, centerY - 10, centerX, centerY + 10);  // Crosshairs
+}
+
+// Function to create the slider for angular speed
+function createSlider() {
+    let sliderContainer = document.createElement('div');
+    sliderContainer.style.position = 'absolute';
+    sliderContainer.style.bottom = '30px';
+    sliderContainer.style.left = '50%';
+    sliderContainer.style.transform = 'translateX(-50%)';
+    sliderContainer.innerHTML = `
+        <label for="speedSlider" style="font-size:16px;">Angular Speed (RPM):</label>
+        <input type="range" id="speedSlider" min="-2" max="2" value="0" step="0.01" style="width: 400px;">
+        <span id="rpmLabel" style="font-size:16px;">0 RPM</span>
+        <span id="radLabel" style="font-size:16px;">(0 rad/s)</span>
+    `;
+    document.body.appendChild(sliderContainer);
+
+    let speedSlider = document.getElementById('speedSlider');
+    let rpmLabel = document.getElementById('rpmLabel');
+    let radLabel = document.getElementById('radLabel');
+
+    speedSlider.addEventListener('input', function () {
+        let rpm = parseFloat(speedSlider.value);
+        angularVelocity = rpm * angularVelocityMax / 2;  // Convert RPM to radians per second
+        rpmLabel.innerText = `${rpm} RPM`;
+        radLabel.innerText = `(${angularVelocity.toFixed(2)} rad/s)`;
+    });
 }
