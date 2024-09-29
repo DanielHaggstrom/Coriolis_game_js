@@ -146,12 +146,13 @@ function create() {
 function update() {
     // Update the position of each projectile
     projectiles.forEach(projectile => {
-        // Skip stopped projectiles (those that hit the wall and have no velocity)
-        if (projectile.vx === 0 && projectile.vy === 0) {
-            return;
+        // Apply centrifugal force even if the projectile has zero speed (and not hit a wall)
+        if (projectile.vx === 0 && projectile.vy === 0 && !projectile.stopped) {
+            applyCentrifugalForceOnly(projectile);
+        } else if (!projectile.stopped) {
+            applyCoriolisAndCentrifugalForce(projectile);  // Apply both Coriolis and centrifugal forces
         }
 
-        applyCoriolisAndCentrifugalForce(projectile);  // Apply both Coriolis and centrifugal forces
         projectile.x += projectile.vx;
         projectile.y += projectile.vy;
 
@@ -159,19 +160,35 @@ function update() {
         if (distanceFromCenter(projectile) >= cylinderRadius) {
             projectile.vx = 0;
             projectile.vy = 0;
+            projectile.stopped = true;  // Mark it as stopped when hitting the wall
         }
     });
 }
 
-// Apply both Coriolis and centrifugal forces to the projectile
-function applyCoriolisAndCentrifugalForce(projectile) {
-    let centerX = squareSize / 2;  // Adjust for the square layout
+// Apply centrifugal force only to projectiles that are not moving
+function applyCentrifugalForceOnly(projectile) {
+    let centerX = squareSize / 2;
     let centerY = squareSize / 2;
 
     // Calculate relative position from the center of the cylinder
     let dx = projectile.x - centerX;
     let dy = projectile.y - centerY;
-    let radialDistance = Math.sqrt(dx * dx + dy * dy);
+
+    // Apply centrifugal force (F_centrifugal = omega^2 * r)
+    let centrifugalForceX = dx * angularVelocity * angularVelocity;
+    let centrifugalForceY = dy * angularVelocity * angularVelocity;
+    projectile.vx += centrifugalForceX;
+    projectile.vy += centrifugalForceY;
+}
+
+// Apply both Coriolis and centrifugal forces to the projectile
+function applyCoriolisAndCentrifugalForce(projectile) {
+    let centerX = squareSize / 2;
+    let centerY = squareSize / 2;
+
+    // Calculate relative position from the center of the cylinder
+    let dx = projectile.x - centerX;
+    let dy = projectile.y - centerY;
 
     // Apply Coriolis force
     let coriolisX = -2 * angularVelocity * projectile.vy;
@@ -188,7 +205,7 @@ function applyCoriolisAndCentrifugalForce(projectile) {
 
 // Function to calculate distance from the center of the cylinder
 function distanceFromCenter(point) {
-    let centerX = squareSize / 2;  // Adjust for the square layout
+    let centerX = squareSize / 2;
     let centerY = squareSize / 2;
     return Math.sqrt(Math.pow(point.x - centerX, 2) + Math.pow(point.y - centerY, 2));
 }
@@ -211,6 +228,9 @@ function createProjectile(scene, position, velocity) {
     // Assign the velocity to the projectile
     projectile.vx = velocity.vx;
     projectile.vy = velocity.vy;
+
+    // Mark the projectile as not stopped (not yet hit a wall)
+    projectile.stopped = false;
 
     // Add the projectile to the list
     projectiles.push(projectile);
@@ -254,7 +274,7 @@ function createSlider() {
     let sliderContainer = document.createElement('div');
     sliderContainer.style.position = 'absolute';
     sliderContainer.style.bottom = '30px';
-    sliderContainer.style.left = `${squareSize + rightRectWidth / 4}px`;  // Position it in the right rectangle
+    sliderContainer.style.left = `${squareSize + rightRectWidth / 2}px`;  // Center it in the right rectangle
     sliderContainer.style.transform = 'translateX(-50%)';
     sliderContainer.innerHTML = `
         <label for="speedSlider" style="font-size:16px;">Angular Speed (RPM):</label>
