@@ -27,8 +27,7 @@ let maxProjectiles = 5; // Limit the number of projectiles to 5
 let graphics; // Single graphics object for drawing the line
 let cylinderRadius; // Radius of the inscribed cylinder
 let angularVelocity = 0; // Initial angular velocity
-let angularVelocityMax = (2 * Math.PI) / 30; // 2 RPM in radians per second
-let sliderLabel; // To show angular speed in RPM and rad/s
+let angularVelocityMax = (2 * Math.PI) / 120; // 0.5 RPM in radians per second (new max angular velocity)
 let speedRatioText; // Text to show the speed ratio during drag
 
 function create() {
@@ -103,19 +102,9 @@ function create() {
             // Calculate the velocity based on the drag distance and direction
             let dragVelocity = calculateVelocity(startPos, pointer);
 
-            // Compute tangential speed based on the projectile's radial distance from the center
-            let radialDistance = distanceFromCenter(startPos);
-            let tangentialVelocity = computeTangentialVelocity(startPos, radialDistance);
-
-            // The final velocity will be the sum of the tangential velocity and drag velocity
-            let finalVelocity = {
-                vx: dragVelocity.vx + tangentialVelocity.vx,
-                vy: dragVelocity.vy + tangentialVelocity.vy
-            };
-
-            // Create and launch the projectile
+            // No tangential velocity is added anymore; we launch only with the drag velocity
             if (insideCylinder(startPos)) {
-                createProjectile(this, startPos, finalVelocity);
+                createProjectile(this, startPos, dragVelocity);
             }
 
             // Clear the drag line after releasing
@@ -132,7 +121,12 @@ function create() {
 function update() {
     // Update the position of each projectile
     projectiles.forEach(projectile => {
-        applyCoriolisForce(projectile);  // Apply Coriolis force
+        // Skip stopped projectiles (those that hit the wall and have no velocity)
+        if (projectile.vx === 0 && projectile.vy === 0) {
+            return;
+        }
+
+        applyCoriolisAndCentrifugalForce(projectile);  // Apply both Coriolis and centrifugal forces
         projectile.x += projectile.vx;
         projectile.y += projectile.vy;
 
@@ -144,15 +138,27 @@ function update() {
     });
 }
 
-// Function to calculate the tangential velocity for a projectile based on its radial distance from the center
-function computeTangentialVelocity(position, radialDistance) {
-    // Tangential velocity is perpendicular to the radial direction (cylinder is spinning counterclockwise)
-    let tangentialVelocity = {
-        vx: -radialDistance * angularVelocity * (position.y - config.height / 2) / radialDistance,
-        vy: radialDistance * angularVelocity * (position.x - config.width / 2) / radialDistance
-    };
+// Apply both Coriolis and centrifugal forces to the projectile
+function applyCoriolisAndCentrifugalForce(projectile) {
+    let centerX = config.width / 2;
+    let centerY = config.height / 2;
 
-    return tangentialVelocity;
+    // Calculate relative position from the center of the cylinder
+    let dx = projectile.x - centerX;
+    let dy = projectile.y - centerY;
+    let radialDistance = Math.sqrt(dx * dx + dy * dy);
+
+    // Apply Coriolis force
+    let coriolisX = -2 * angularVelocity * projectile.vy;
+    let coriolisY = 2 * angularVelocity * projectile.vx;
+    projectile.vx += coriolisX;
+    projectile.vy += coriolisY;
+
+    // Apply centrifugal force (F_centrifugal = omega^2 * r)
+    let centrifugalForceX = dx * angularVelocity * angularVelocity;
+    let centrifugalForceY = dy * angularVelocity * angularVelocity;
+    projectile.vx += centrifugalForceX;
+    projectile.vy += centrifugalForceY;
 }
 
 // Function to calculate distance from the center of the cylinder
@@ -205,18 +211,6 @@ function calculateVelocity(startPos, endPos) {
     };
 }
 
-// Function to apply Coriolis force to projectiles
-function applyCoriolisForce(projectile) {
-    let relativeX = projectile.x - config.width / 2;
-    let relativeY = projectile.y - config.height / 2;
-
-    let coriolisX = -2 * angularVelocity * projectile.vy;
-    let coriolisY = 2 * angularVelocity * projectile.vx;
-
-    projectile.vx += coriolisX;
-    projectile.vy += coriolisY;
-}
-
 // Function to re-draw the static elements (box, circle, and crosshairs)
 function drawStaticElements(graphics) {
     let centerX = config.width / 2;
@@ -239,7 +233,7 @@ function createSlider() {
     sliderContainer.style.transform = 'translateX(-50%)';
     sliderContainer.innerHTML = `
         <label for="speedSlider" style="font-size:16px;">Angular Speed (RPM):</label>
-        <input type="range" id="speedSlider" min="-2" max="2" value="0" step="0.01" style="width: 400px;">
+        <input type="range" id="speedSlider" min="-0.5" max="0.5" value="0" step="0.01" style="width: 400px;">
         <span id="rpmLabel" style="font-size:16px;">0 RPM</span>
         <span id="radLabel" style="font-size:16px;">(0 rad/s)</span>
     `;
@@ -251,7 +245,7 @@ function createSlider() {
 
     speedSlider.addEventListener('input', function () {
         let rpm = parseFloat(speedSlider.value);
-        angularVelocity = rpm * angularVelocityMax / 2;  // Convert RPM to radians per second
+        angularVelocity = rpm * angularVelocityMax / 0.5;  // Convert RPM to radians per second (new scale)
         rpmLabel.innerText = `${rpm} RPM`;
         radLabel.innerText = `(${angularVelocity.toFixed(2)} rad/s)`;
     });
