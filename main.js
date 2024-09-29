@@ -22,7 +22,7 @@ let isDragging = false;
 let startPos = null;
 let dragLine = null;
 let velocityScale = 50;  // Adjust the speed scale as needed
-let maxDragDistance = 200;
+let maxDragDistance = 200;  // Max drag distance for max velocity
 let maxProjectiles = 5; // Limit the number of projectiles to 5
 let graphics; // Single graphics object for drawing the line
 let cylinderRadius; // Radius of the inscribed cylinder
@@ -71,11 +71,27 @@ function create() {
 
     this.input.on('pointermove', (pointer) => {
         if (isDragging && dragLine) {
-            // Update the line's end point to the current pointer position
-            dragLine.setTo(startPos.x, startPos.y, pointer.x, pointer.y);
+            // Calculate the drag distance and cap it to maxDragDistance
+            let currentPos = { x: pointer.x, y: pointer.y };
+            let dragVector = {
+                dx: currentPos.x - startPos.x,
+                dy: currentPos.y - startPos.y
+            };
+            let dragDistance = Math.sqrt(dragVector.dx * dragVector.dx + dragVector.dy * dragVector.dy);
+
+            // Cap the drag distance if it exceeds the max allowed
+            if (dragDistance > maxDragDistance) {
+                // Scale the current position back to the max drag distance
+                let scale = maxDragDistance / dragDistance;
+                currentPos.x = startPos.x + dragVector.dx * scale;
+                currentPos.y = startPos.y + dragVector.dy * scale;
+            }
+
+            // Update the dragLine
+            dragLine.setTo(startPos.x, startPos.y, currentPos.x, currentPos.y);
 
             // Calculate launch speed and ratio
-            let dragVelocity = calculateVelocity(startPos, pointer);
+            let dragVelocity = calculateVelocity(startPos, currentPos);
             let radialDistance = distanceFromCenter(startPos);
             let tangentialSpeed = Math.abs(radialDistance * angularVelocity);
             let launchSpeedMagnitude = Math.sqrt(dragVelocity.vx * dragVelocity.vx + dragVelocity.vy * dragVelocity.vy);
