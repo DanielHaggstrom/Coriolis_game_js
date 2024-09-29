@@ -1,6 +1,6 @@
 let config = {
     type: Phaser.AUTO,
-    width: 1200,
+    width: 1400,  // Make the canvas wider
     height: 800,
     backgroundColor: '#FFFFFF',
     physics: {
@@ -30,24 +30,28 @@ let angularVelocity = 0; // Initial angular velocity
 let angularVelocityMax = (2 * Math.PI) / 120; // 0.5 RPM in radians per second (new max angular velocity)
 let speedRatioText; // Text to show the speed ratio during drag
 
+// Constants for layout
+let squareSize = config.height;  // The size of the square (height of the game canvas)
+let rightRectWidth = config.width - squareSize;  // The width of the right rectangle
+
 function create() {
     // Create a single graphics object for the entire scene
     graphics = this.add.graphics();
 
     // Calculate the inscribed circle's radius (cylinder radius)
-    let centerX = config.width / 2;
-    let centerY = config.height / 2;
-    cylinderRadius = Math.min(config.width, config.height) / 2 - 10;  // The -10 is for padding from the boundaries
+    let centerX = squareSize / 2;  // Center based on the square on the left
+    let centerY = squareSize / 2;
+    cylinderRadius = Math.min(squareSize, squareSize) / 2 - 10;  // The -10 is for padding from the boundaries
 
-    // Draw the box boundaries
+    // Draw the box boundaries for the square on the left
     graphics.lineStyle(2, 0x808080);  // Thin gray line for boundaries
-    graphics.strokeRect(0, 0, config.width, config.height);  // Box around the entire game area
+    graphics.strokeRect(0, 0, squareSize, squareSize);  // Box (square) on the left
 
-    // Draw the large black circle (inscribed cylinder)
+    // Draw the large black circle (inscribed cylinder inside the square)
     graphics.lineStyle(8, 0x000000);  // Thick black circle
     graphics.strokeCircle(centerX, centerY, cylinderRadius);
 
-    // Draw the crosshairs in the center
+    // Draw the crosshairs in the center of the cylinder
     graphics.lineStyle(2, 0x000000);  // Thin black line for crosshairs
     graphics.lineBetween(centerX - 10, centerY, centerX + 10, centerY);  // Horizontal line
     graphics.lineBetween(centerX, centerY - 10, centerX, centerY + 10);  // Vertical line
@@ -56,7 +60,7 @@ function create() {
     speedRatioText = this.add.text(0, 0, '', { fontSize: '16px', fill: '#000', backgroundColor: '#FFFFFF', padding: 5 });
     speedRatioText.setVisible(false);  // Hide initially
 
-    // Create the slider and place it in the HTML outside the Phaser canvas
+    // Create the slider and place it in the right rectangle (outside the Phaser canvas)
     createSlider();
 
     // Handle mouse input for dragging and launching projectiles
@@ -161,8 +165,8 @@ function update() {
 
 // Apply both Coriolis and centrifugal forces to the projectile
 function applyCoriolisAndCentrifugalForce(projectile) {
-    let centerX = config.width / 2;
-    let centerY = config.height / 2;
+    let centerX = squareSize / 2;  // Adjust for the square layout
+    let centerY = squareSize / 2;
 
     // Calculate relative position from the center of the cylinder
     let dx = projectile.x - centerX;
@@ -184,12 +188,12 @@ function applyCoriolisAndCentrifugalForce(projectile) {
 
 // Function to calculate distance from the center of the cylinder
 function distanceFromCenter(point) {
-    let centerX = config.width / 2;
-    let centerY = config.height / 2;
+    let centerX = squareSize / 2;  // Adjust for the square layout
+    let centerY = squareSize / 2;
     return Math.sqrt(Math.pow(point.x - centerX, 2) + Math.pow(point.y - centerY, 2));
 }
 
-// Function to check if a point is inside the cylinder
+// Function to check if a point is inside the cylinder (within the left square)
 function insideCylinder(point) {
     return distanceFromCenter(point) <= cylinderRadius;
 }
@@ -234,10 +238,10 @@ function calculateVelocity(startPos, endPos) {
 
 // Function to re-draw the static elements (box, circle, and crosshairs)
 function drawStaticElements(graphics) {
-    let centerX = config.width / 2;
-    let centerY = config.height / 2;
+    let centerX = squareSize / 2;  // Adjust for the square layout
+    let centerY = squareSize / 2;
     graphics.lineStyle(2, 0x808080);
-    graphics.strokeRect(0, 0, config.width, config.height);  // Box boundaries
+    graphics.strokeRect(0, 0, squareSize, squareSize);  // Box boundaries (square)
     graphics.lineStyle(8, 0x000000);
     graphics.strokeCircle(centerX, centerY, cylinderRadius);  // Large black circle (cylinder)
     graphics.lineStyle(2, 0x000000);
@@ -250,11 +254,11 @@ function createSlider() {
     let sliderContainer = document.createElement('div');
     sliderContainer.style.position = 'absolute';
     sliderContainer.style.bottom = '30px';
-    sliderContainer.style.left = '50%';
+    sliderContainer.style.left = `${squareSize + rightRectWidth / 4}px`;  // Position it in the right rectangle
     sliderContainer.style.transform = 'translateX(-50%)';
     sliderContainer.innerHTML = `
         <label for="speedSlider" style="font-size:16px;">Angular Speed (RPM):</label>
-        <input type="range" id="speedSlider" min="-0.5" max="0.5" value="0" step="0.01" style="width: 400px;">
+        <input type="range" id="speedSlider" min="-0.5" max="0.5" value="0" step="0.01" style="width: 300px;">
         <span id="rpmLabel" style="font-size:16px;">0 RPM</span>
         <span id="radLabel" style="font-size:16px;">(0 rad/s)</span>
     `;
