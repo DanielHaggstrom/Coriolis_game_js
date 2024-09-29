@@ -52,8 +52,9 @@ function create() {
     graphics.lineBetween(centerX - 10, centerY, centerX + 10, centerY);  // Horizontal line
     graphics.lineBetween(centerX, centerY - 10, centerX, centerY + 10);  // Vertical line
 
-    // Create the speed ratio text
-    speedRatioText = this.add.text(20, 20, '', { fontSize: '16px', fill: '#000' });
+    // Create a dynamic text object for the speed ratio (initially hidden)
+    speedRatioText = this.add.text(0, 0, '', { fontSize: '16px', fill: '#000', backgroundColor: '#FFFFFF', padding: 5 });
+    speedRatioText.setVisible(false);  // Hide initially
 
     // Create the slider and place it in the HTML outside the Phaser canvas
     createSlider();
@@ -66,6 +67,10 @@ function create() {
 
             // Create a line object for the drag
             dragLine = new Phaser.Geom.Line(startPos.x, startPos.y, pointer.x, pointer.y);
+
+            // Set the position of the speed ratio text near the starting point
+            speedRatioText.setPosition(startPos.x + 10, startPos.y - 25);  // Position slightly to the right and above the start
+            speedRatioText.setVisible(true);  // Make the text visible
         }
     });
 
@@ -97,7 +102,7 @@ function create() {
             let launchSpeedMagnitude = Math.sqrt(dragVelocity.vx * dragVelocity.vx + dragVelocity.vy * dragVelocity.vy);
             let speedRatio = tangentialSpeed !== 0 ? (launchSpeedMagnitude / tangentialSpeed).toFixed(2) : '∞';
 
-            // Update speed ratio text
+            // Update speed ratio text next to the starting point
             speedRatioText.setText(`Speed Ratio: ${speedRatio}`);
 
             // Clear the previous frame's graphics and draw the updated line
@@ -128,8 +133,8 @@ function create() {
             drawStaticElements(graphics);
             dragLine = null;
 
-            // Clear speed ratio text
-            speedRatioText.setText('');
+            // Hide the speed ratio text after launching
+            speedRatioText.setVisible(false);
         }
     });
 }
